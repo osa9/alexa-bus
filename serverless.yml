@@ -1,0 +1,14 @@
+service: myalexaskill
+
+provider:
+  name: aws
+  runtime: python3.6
+
+plugins:
+  - serverless-python-requirements
+
+functions:
+  bus-schedule:
+    handler: alexa_bus.bus
+    events:
+      - alexaSkill
