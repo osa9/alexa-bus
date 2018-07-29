@@ -1,6 +1,6 @@
 # 概要
 Alexaにバスの到着時刻を教えて貰うためのサンプルです．
-Amazon Echo Spot対応判
+Amazon Echo Spot対応版
 
 # How to use
 
