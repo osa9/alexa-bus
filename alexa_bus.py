@@ -7,8 +7,14 @@ from bs4 import BeautifulSoup
 BUS_SCHEDULE_URL = 'http://www.odakyubus-navi.com/blsys/loca?VID=lsc&EID=nt&DSMK=46&ASMK=148'
 
 
-# 小田急バスのリアルタイム運行状況を取得する
+# Echo Spotの画面に表示される背景画像(480x480のPNG/JPG)
+IMAGE_URL = 'https://example.com/example.png'
+
+
 def get_bus_schedule(url):
+    """
+    小田急バスのリアルタイム運行状況を取得する
+    """
     logging.info("Retrieving URL: {}".format(url))
     content = urllib.request.urlopen(url).read().decode('shift_jisx0213')
     soup = BeautifulSoup(content, "html.parser")
@@ -19,6 +25,9 @@ def get_bus_schedule(url):
         message = errors[0].contents[0]
         logging.warn("Error: ".format(message))
         raise Exception(message)
+
+    # 区間を取得する
+    section = soup.select('.mt10')[0].contents[0].split('：')[1]
 
     # ダイヤをパースする
     result = []
@@ -40,33 +49,69 @@ def get_bus_schedule(url):
 
         result += [info]
 
-    return result
+    return section, result
 
 
 def bus(event, context):
+    """
+    Alexaから呼び出されるハンドラー
+    """
     logging.info(event)
 
     # もしバス停名を指定したければ使う
     # busStopName = event['request']['intent']['slots']['BusStop']
 
-    # スケジュールを取得してメッセージを組み立てる
+    # スケジュールを取得してメッセージを作成
     try:
-        schedules = get_bus_schedule(BUS_SCHEDULE_URL)
-        message = '{}行きのバスは{}'.format(schedules[0]['destination'], schedules[0]['status'])
+        section, schedules = get_bus_schedule(BUS_SCHEDULE_URL)
+
+        # しゃべるメッセージ
+        speech_message = '{}行きのバスは{}'.format(schedules[0]['destination'], schedules[0]['status'])
         if len(schedules) > 1:
-            message += '次は{}'.format(schedules[1]['status'])
+            speech_message += '次は{}'.format(schedules[1]['status'])
+
+        # 表示するメッセージ(タイトルと本文)
+        display_title = section
+        content = '<br/>'.join(map(lambda s: '{}:{}'.format(s['destination'],s['status']), schedules[:3]))
+        display_message = '<font size="2">{}</font>'.format(content)
     except Exception as e:
-        message = 'エラー {}'.format(e.message)
+        print(e)
+        speech_message = 'エラーが発生しました'
+        display_title = 'エラー'
+        display_message = speech_message
 
-    logging.info(message)
-
+    # レスポンスを組み立てて返却する
     response = {
         'version': '1.0',
         'response': {
             'outputSpeech': {
                 'type': 'PlainText',
-                'text': message,
-            }
+                'text': speech_message,
+            },
+            'directives': [
+                {
+                    'type': 'Display.RenderTemplate',
+                    'template': {
+                        'type': 'BodyTemplate1',  # テンプレートの種類
+                        'token': 'TimeTable1',  # 画面の名前(ページ遷移で使う)
+                        'title': display_title,  # タイトル
+                        'backgroundImage': {  # 背景画像(省略可)
+                            "contentDescription": "string",
+                            "sources": [
+                                {
+                                    "url": IMAGE_URL,
+                                }
+                            ]
+                        },
+                        'textContent': {  # 本文
+                            'primaryText': {
+                                'type': 'RichText',
+                                'text': display_message
+                            }
+                        }
+                    }
+                }
+            ]
         }
     }
 
